@@ -1,0 +1,80 @@
+[
+  {
+    "name": "circle_baseline",
+    "title": "Circle baseline",
+    "description": "Single hidden layer baseline for the circle classifier.",
+    "shape": "circle",
+    "epochs": 1000,
+    "hidden_size": 8,
+    "hidden_layers": 1,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 1001
+  },
+  {
+    "name": "circle_wide",
+    "title": "Circle wide",
+    "description": "A wider one-layer model learning the circle boundary.",
+    "shape": "circle",
+    "epochs": 1000,
+    "hidden_size": 16,
+    "hidden_layers": 1,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 1002
+  },
+  {
+    "name": "circle_deep",
+    "title": "Circle deep",
+    "description": "A deeper narrow model learning the circle boundary.",
+    "shape": "circle",
+    "epochs": 1000,
+    "hidden_size": 8,
+    "hidden_layers": 3,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 1003
+  },
+  {
+    "name": "box_baseline",
+    "title": "Box baseline",
+    "description": "Single hidden layer baseline for the axis-aligned box classifier.",
+    "shape": "box",
+    "epochs": 1000,
+    "hidden_size": 8,
+    "hidden_layers": 1,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 2001
+  },
+  {
+    "name": "box_wide",
+    "title": "Box wide",
+    "description": "A wider one-layer model learning the box boundary.",
+    "shape": "box",
+    "epochs": 1000,
+    "hidden_size": 16,
+    "hidden_layers": 1,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 2002
+  },
+  {
+    "name": "box_deep",
+    "title": "Box deep",
+    "description": "A deeper narrow model learning the box boundary.",
+    "shape": "box",
+    "epochs": 1000,
+    "hidden_size": 8,
+    "hidden_layers": 3,
+    "num_samples": 4096,
+    "batch_size": 256,
+    "learning_rate": 0.001,
+    "seed": 2003
+  }
+]
