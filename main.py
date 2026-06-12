@@ -142,7 +142,6 @@ def make_prediction_grid(
 
 def plot_decision_boundary(
     model: ShapeClassifier,
-    dataset: TensorDataset,
     shape: str,
     seed: int,
     result: TrainingResult,
@@ -154,8 +153,6 @@ def plot_decision_boundary(
     import matplotlib.pyplot as plt
 
     grid_x, grid_y, probabilities = make_prediction_grid(model)
-    points, labels = dataset.tensors
-    inside = labels.bool()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -177,23 +174,6 @@ def plot_decision_boundary(
         linewidths=2,
     )
 
-    ax.scatter(
-        points[~inside, 0].numpy(),
-        points[~inside, 1].numpy(),
-        s=8,
-        c="#3b4252",
-        alpha=0.35,
-        label="outside samples",
-    )
-    ax.scatter(
-        points[inside, 0].numpy(),
-        points[inside, 1].numpy(),
-        s=8,
-        c="#d08770",
-        alpha=0.45,
-        label="inside samples",
-    )
-
     ax.set_title(
         f"{shape} | seed {seed} | loss {result.final_loss:.4f} | "
         f"accuracy {result.final_accuracy:.3f}"
@@ -203,7 +183,6 @@ def plot_decision_boundary(
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlim(DOMAIN_MIN, DOMAIN_MAX)
     ax.set_ylim(DOMAIN_MIN, DOMAIN_MAX)
-    ax.legend(loc="upper right")
     fig.colorbar(background, ax=ax, label="predicted probability of inside")
     fig.tight_layout()
     fig.savefig(output_path, dpi=160)
@@ -254,7 +233,6 @@ def main() -> None:
 
     plot_decision_boundary(
         model=model,
-        dataset=dataset,
         shape=args.shape,
         seed=seed,
         result=result,
