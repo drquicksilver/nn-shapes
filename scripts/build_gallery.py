@@ -10,7 +10,18 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from main import SHAPES, ShapeClassifier, make_dataset, plot_decision_boundary, set_seed, train_model
+from main import (
+    SHAPES,
+    ShapeClassifier,
+    make_dataset,
+    make_epoch_output_path,
+    plot_decision_boundary,
+    set_seed,
+    train_model,
+)
+
+
+GALLERY_SNAPSHOT_INTERVAL_EPOCHS = 50
 
 
 @dataclass(frozen=True)
@@ -48,8 +59,15 @@ class Experiment:
                 f"--learning-rate {self.learning_rate:g}",
                 f"--seed {self.seed}",
                 f"--output {output_path.as_posix()}",
+                f"--plot-every-epochs {GALLERY_SNAPSHOT_INTERVAL_EPOCHS}",
             ]
         )
+
+
+@dataclass(frozen=True)
+class GalleryFrame:
+    epoch: int
+    image_path: str
 
 
 @dataclass(frozen=True)
@@ -58,12 +76,14 @@ class GalleryItem:
     final_loss: float
     final_accuracy: float
     output_path: Path
+    frames: List[GalleryFrame]
 
     def metadata(self) -> Dict[str, Any]:
         data = asdict(self.experiment)
         data.update(
             {
                 "image_path": self.experiment.image_path,
+                "frames": [asdict(frame) for frame in self.frames],
                 "final_loss": self.final_loss,
                 "final_accuracy": self.final_accuracy,
                 "command": self.experiment.command(self.output_path),
@@ -114,18 +134,40 @@ def load_experiments(config_path: Path) -> List[Experiment]:
 
 def run_experiment(experiment: Experiment, site_dir: Path) -> GalleryItem:
     output_path = site_dir / experiment.image_path
+    frames: List[GalleryFrame] = []
     set_seed(experiment.seed)
     dataset = make_dataset(experiment.shape, experiment.num_samples)
     model = ShapeClassifier(
         hidden_size=experiment.hidden_size,
         hidden_layers=experiment.hidden_layers,
     )
+
+    def save_epoch_frame(epoch: int, epoch_result: Any) -> None:
+        frame_output_path = make_epoch_output_path(output_path, epoch, experiment.epochs)
+        plot_decision_boundary(
+            model=model,
+            shape=experiment.shape,
+            seed=experiment.seed,
+            result=epoch_result,
+            output_path=frame_output_path,
+            show=False,
+            training_epoch=epoch,
+        )
+        frames.append(
+            GalleryFrame(
+                epoch=epoch,
+                image_path=frame_output_path.relative_to(site_dir).as_posix(),
+            )
+        )
+
     result = train_model(
         model=model,
         dataset=dataset,
         epochs=experiment.epochs,
         batch_size=experiment.batch_size,
         learning_rate=experiment.learning_rate,
+        snapshot_interval_epochs=GALLERY_SNAPSHOT_INTERVAL_EPOCHS,
+        snapshot_callback=save_epoch_frame,
     )
     plot_decision_boundary(
         model=model,
@@ -135,26 +177,54 @@ def run_experiment(experiment: Experiment, site_dir: Path) -> GalleryItem:
         output_path=output_path,
         show=False,
     )
+    if not frames or frames[-1].epoch != experiment.epochs:
+        frames.append(
+            GalleryFrame(
+                epoch=experiment.epochs,
+                image_path=experiment.image_path,
+            )
+        )
     return GalleryItem(
         experiment=experiment,
         final_loss=result.final_loss,
         final_accuracy=result.final_accuracy,
         output_path=output_path,
+        frames=frames,
     )
 
 
 def render_card(item: GalleryItem) -> str:
     experiment = item.experiment
-    image_path = html.escape(experiment.image_path, quote=True)
+    initial_frame = item.frames[-1] if item.frames else GalleryFrame(
+        epoch=experiment.epochs,
+        image_path=experiment.image_path,
+    )
+    image_path = html.escape(initial_frame.image_path, quote=True)
+    frame_sources = html.escape(
+        json.dumps([frame.image_path for frame in item.frames]),
+        quote=True,
+    )
+    frame_labels = html.escape(
+        json.dumps([f"Epoch {frame.epoch}" for frame in item.frames]),
+        quote=True,
+    )
+    frame_max = max(len(item.frames) - 1, 0)
+    frame_value = frame_max
+    frame_label = html.escape(f"Epoch {initial_frame.epoch}")
     title = html.escape(experiment.title)
     description = html.escape(experiment.description)
     command = html.escape(experiment.command(item.output_path))
     return f"""
-      <article class="card">
-        <a href="{image_path}"><img loading="lazy" src="{image_path}" alt="{title} decision boundary"></a>
+      <article class="card" data-scrubber-card data-frame-srcs="{frame_sources}" data-frame-labels="{frame_labels}">
+        <a class="figure-link" href="{image_path}"><img class="figure-image" loading="lazy" src="{image_path}" alt="{title} decision boundary"></a>
         <div class="card-body">
           <h2>{title}</h2>
           <p>{description}</p>
+          <label class="scrubber">
+            <span>Training epoch</span>
+            <input class="frame-scrubber" type="range" min="0" max="{frame_max}" value="{frame_value}" step="1">
+            <output class="frame-label">{frame_label}</output>
+          </label>
           <dl>
             <div><dt>Shape</dt><dd>{html.escape(experiment.shape)}</dd></div>
             <div><dt>Seed</dt><dd>{experiment.seed}</dd></div>
@@ -255,6 +325,23 @@ def render_index(items: Iterable[GalleryItem]) -> str:
       margin: 0 0 1rem;
       color: var(--muted);
     }}
+    .scrubber {{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.35rem 0.75rem;
+      align-items: center;
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }}
+    .scrubber input {{
+      grid-column: 1 / -1;
+      width: 100%;
+    }}
+    .scrubber output {{
+      color: var(--text);
+      font-weight: 650;
+    }}
     dl {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -302,6 +389,29 @@ def render_index(items: Iterable[GalleryItem]) -> str:
 {cards}
     </section>
   </main>
+  <script>
+    for (const card of document.querySelectorAll("[data-scrubber-card]")) {{
+      const sources = JSON.parse(card.dataset.frameSrcs || "[]");
+      const labels = JSON.parse(card.dataset.frameLabels || "[]");
+      const image = card.querySelector(".figure-image");
+      const link = card.querySelector(".figure-link");
+      const scrubber = card.querySelector(".frame-scrubber");
+      const output = card.querySelector(".frame-label");
+
+      function showFrame(index) {{
+        const source = sources[index];
+        if (!source) {{
+          return;
+        }}
+        image.src = source;
+        link.href = source;
+        output.textContent = labels[index] || "";
+      }}
+
+      scrubber.addEventListener("input", () => showFrame(Number(scrubber.value)));
+      showFrame(Number(scrubber.value));
+    }}
+  </script>
 </body>
 </html>
 """

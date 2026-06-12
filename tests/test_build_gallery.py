@@ -5,6 +5,7 @@ from pathlib import Path
 
 from scripts.build_gallery import (
     Experiment,
+    GalleryFrame,
     GalleryItem,
     load_experiments,
     render_index,
@@ -83,6 +84,10 @@ class GalleryRenderingTests(unittest.TestCase):
             final_loss=0.12345,
             final_accuracy=0.98765,
             output_path=Path("site/images/circle_html.png"),
+            frames=[
+                GalleryFrame(epoch=0, image_path="images/circle_html_epoch_0.png"),
+                GalleryFrame(epoch=2, image_path="images/circle_html_epoch_2.png"),
+            ],
         )
 
     def test_render_index_includes_escaped_experiment_metadata(self) -> None:
@@ -93,6 +98,10 @@ class GalleryRenderingTests(unittest.TestCase):
         self.assertIn("Final accuracy", html)
         self.assertIn("0.988", html)
         self.assertIn("images/circle_html.png", html)
+        self.assertIn('data-scrubber-card', html)
+        self.assertIn('value="1"', html)
+        self.assertIn("images/circle_html_epoch_2.png", html)
+        self.assertIn("Epoch 2", html)
 
     def test_write_manifest_records_reproducibility_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -103,9 +112,17 @@ class GalleryRenderingTests(unittest.TestCase):
 
         self.assertEqual(manifest[0]["name"], "circle_html")
         self.assertEqual(manifest[0]["image_path"], "images/circle_html.png")
+        self.assertEqual(
+            manifest[0]["frames"],
+            [
+                {"epoch": 0, "image_path": "images/circle_html_epoch_0.png"},
+                {"epoch": 2, "image_path": "images/circle_html_epoch_2.png"},
+            ],
+        )
         self.assertEqual(manifest[0]["final_loss"], 0.12345)
         self.assertIn("--seed 42", manifest[0]["command"])
         self.assertIn("--output site/images/circle_html.png", manifest[0]["command"])
+        self.assertIn("--plot-every-epochs 50", manifest[0]["command"])
 
 
 if __name__ == "__main__":

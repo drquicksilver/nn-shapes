@@ -23,7 +23,7 @@ This writes the final plot to `outputs/circle.png`, plus snapshots such as `outp
 The repository includes a static gallery pipeline for article-figure iteration:
 
 - `gallery/experiments.json` defines the parameter sets to render.
-- `scripts/build_gallery.py` trains each configured experiment, writes PNGs into `site/images/`, writes `site/index.html`, and writes `site/manifest.json` with reproducibility metadata.
+- `scripts/build_gallery.py` trains each configured experiment, writes final and every-50-epoch PNGs into `site/images/`, writes `site/index.html` with per-experiment scrubbers, and writes `site/manifest.json` with reproducibility metadata.
 - `.github/workflows/gallery.yml` runs the tests with `python -m unittest discover -s tests`, builds the gallery, uploads the generated `site/` directory as a GitHub Pages artifact, and deploys it to GitHub Pages.
 
 Build the gallery locally with:
