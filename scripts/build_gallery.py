@@ -129,7 +129,6 @@ def run_experiment(experiment: Experiment, site_dir: Path) -> GalleryItem:
     )
     plot_decision_boundary(
         model=model,
-        dataset=dataset,
         shape=experiment.shape,
         seed=experiment.seed,
         result=result,
