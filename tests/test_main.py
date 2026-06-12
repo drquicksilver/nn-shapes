@@ -1,8 +1,10 @@
 import unittest
+from pathlib import Path
 
 import torch
+from torch.utils.data import TensorDataset
 
-from main import ShapeClassifier, label_box, label_circle
+from main import ShapeClassifier, make_epoch_output_path, label_box, label_circle, train_model
 
 
 class ShapeLabelTests(unittest.TestCase):
@@ -43,6 +45,57 @@ class ModelTests(unittest.TestCase):
         logits = model(points)
 
         self.assertEqual(logits.shape, torch.Size([5]))
+
+
+class TrainingSnapshotTests(unittest.TestCase):
+    def test_train_model_calls_snapshot_callback_before_training_and_at_epoch_interval(
+        self,
+    ) -> None:
+        model = ShapeClassifier(hidden_size=4, hidden_layers=1)
+        dataset = TensorDataset(
+            torch.zeros(4, 2),
+            torch.tensor([0.0, 1.0, 0.0, 1.0]),
+        )
+        snapshot_epochs = []
+
+        train_model(
+            model=model,
+            dataset=dataset,
+            epochs=4,
+            batch_size=2,
+            learning_rate=0.001,
+            snapshot_interval_epochs=2,
+            snapshot_callback=lambda epoch, result: snapshot_epochs.append(epoch),
+        )
+
+        self.assertEqual(snapshot_epochs, [0, 2, 4])
+
+    def test_train_model_rejects_non_positive_snapshot_epoch_interval(self) -> None:
+        model = ShapeClassifier(hidden_size=4, hidden_layers=1)
+        dataset = TensorDataset(torch.zeros(2, 2), torch.tensor([0.0, 1.0]))
+
+        with self.assertRaisesRegex(ValueError, "must be positive"):
+            train_model(
+                model=model,
+                dataset=dataset,
+                epochs=1,
+                batch_size=1,
+                learning_rate=0.001,
+                snapshot_interval_epochs=0,
+                snapshot_callback=lambda epoch, result: None,
+            )
+
+
+class OutputPathTests(unittest.TestCase):
+    def test_make_epoch_output_path_pads_to_total_epoch_digits(self) -> None:
+        output_path = make_epoch_output_path(Path("outputs/circle.png"), 25, 500)
+
+        self.assertEqual(output_path, Path("outputs/circle_epoch_025.png"))
+
+    def test_make_epoch_output_path_defaults_to_png_suffix(self) -> None:
+        output_path = make_epoch_output_path(Path("outputs/circle"), 0, 4)
+
+        self.assertEqual(output_path, Path("outputs/circle_epoch_0.png"))
 
 
 if __name__ == "__main__":

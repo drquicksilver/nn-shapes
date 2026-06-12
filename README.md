@@ -8,7 +8,15 @@ Train a small neural network to classify whether two-dimensional points are insi
 uv run python main.py --shape circle --seed 1001 --output outputs/circle.png
 ```
 
-Useful parameters include `--shape`, `--epochs`, `--hidden-size`, `--hidden-layers`, `--num-samples`, `--batch-size`, `--learning-rate`, `--seed`, and `--output`.
+Useful parameters include `--shape`, `--epochs`, `--hidden-size`, `--hidden-layers`, `--num-samples`, `--batch-size`, `--learning-rate`, `--seed`, `--output`, and `--plot-every-epochs`.
+
+To save training snapshots, pass a positive epoch interval:
+
+```bash
+uv run python main.py --shape circle --seed 1001 --output outputs/circle.png --plot-every-epochs 10
+```
+
+This writes the final plot to `outputs/circle.png`, plus snapshots such as `outputs/circle_epoch_0000.png` and `outputs/circle_epoch_0010.png`. Epoch 0 is saved before training so the random initialisation is visible. The filename padding is based on the total epochs for the run.
 
 ## Generated image gallery
 

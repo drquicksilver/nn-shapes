@@ -2,7 +2,7 @@ import argparse
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import matplotlib
 
@@ -60,6 +60,9 @@ class TrainingResult:
     final_accuracy: float
 
 
+SnapshotCallback = Callable[[int, TrainingResult], None]
+
+
 def choose_seed(seed: Optional[int]) -> int:
     if seed is not None:
         return seed
@@ -88,10 +91,18 @@ def train_model(
     epochs: int,
     batch_size: int,
     learning_rate: float,
+    snapshot_interval_epochs: Optional[int] = None,
+    snapshot_callback: Optional[SnapshotCallback] = None,
 ) -> TrainingResult:
+    if snapshot_interval_epochs is not None and snapshot_interval_epochs <= 0:
+        raise ValueError("snapshot_interval_epochs must be positive")
+
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = nn.BCEWithLogitsLoss()
+
+    if snapshot_interval_epochs is not None and snapshot_callback is not None:
+        snapshot_callback(0, evaluate_model(model, dataset))
 
     final_loss = 0.0
     for epoch in range(1, epochs + 1):
@@ -110,12 +121,32 @@ def train_model(
             total_items += points.size(0)
 
         final_loss = total_loss / total_items
+        if (
+            snapshot_interval_epochs is not None
+            and snapshot_callback is not None
+            and epoch % snapshot_interval_epochs == 0
+        ):
+            snapshot_callback(epoch, evaluate_model(model, dataset))
         if epoch == 1 or epoch % 100 == 0 or epoch == epochs:
             print(f"epoch {epoch:4d}  loss {final_loss:.4f}")
 
     return TrainingResult(
         final_loss=final_loss,
         final_accuracy=calculate_accuracy(model, dataset),
+    )
+
+
+def evaluate_model(model: ShapeClassifier, dataset: TensorDataset) -> TrainingResult:
+    points, labels = dataset.tensors
+    loss_fn = nn.BCEWithLogitsLoss()
+    with torch.no_grad():
+        logits = model(points)
+        loss = loss_fn(logits, labels).item()
+        predicted_inside = torch.sigmoid(logits) >= 0.5
+    correct = predicted_inside == labels.bool()
+    return TrainingResult(
+        final_loss=loss,
+        final_accuracy=correct.float().mean().item(),
     )
 
 
@@ -147,6 +178,7 @@ def plot_decision_boundary(
     result: TrainingResult,
     output_path: Path,
     show: bool,
+    training_epoch: Optional[int] = None,
 ) -> None:
     if not show:
         matplotlib.use("Agg")
@@ -174,10 +206,15 @@ def plot_decision_boundary(
         linewidths=2,
     )
 
-    ax.set_title(
-        f"{shape} | seed {seed} | loss {result.final_loss:.4f} | "
-        f"accuracy {result.final_accuracy:.3f}"
-    )
+    title_parts = [
+        shape,
+        f"seed {seed}",
+        f"loss {result.final_loss:.4f}",
+        f"accuracy {result.final_accuracy:.3f}",
+    ]
+    if training_epoch is not None:
+        title_parts.insert(2, f"epoch {training_epoch}")
+    ax.set_title(" | ".join(title_parts))
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.set_aspect("equal", adjustable="box")
@@ -194,6 +231,22 @@ def plot_decision_boundary(
         plt.close(fig)
 
 
+def make_epoch_output_path(output_path: Path, epoch: int, total_epochs: int) -> Path:
+    suffix = output_path.suffix or ".png"
+    width = len(str(total_epochs))
+    return output_path.with_name(f"{output_path.stem}_epoch_{epoch:0{width}d}{suffix}")
+
+
+def positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Train a small neural network to learn inside/outside a shape."
@@ -207,6 +260,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output", type=Path, default=Path("outputs/decision_boundary.png"))
+    parser.add_argument(
+        "--plot-every-epochs",
+        type=positive_int,
+        metavar="N",
+        default=None,
+        help=(
+            "Save additional plots before training and after every N epochs. "
+            "Snapshots are written next to --output as *_epoch_000000.png files."
+        ),
+    )
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()
 
@@ -222,12 +285,26 @@ def main() -> None:
         hidden_size=args.hidden_size,
         hidden_layers=args.hidden_layers,
     )
+
+    def save_epoch_plot(epoch: int, epoch_result: TrainingResult) -> None:
+        plot_decision_boundary(
+            model=model,
+            shape=args.shape,
+            seed=seed,
+            result=epoch_result,
+            output_path=make_epoch_output_path(args.output, epoch, args.epochs),
+            show=False,
+            training_epoch=epoch,
+        )
+
     result = train_model(
         model=model,
         dataset=dataset,
         epochs=args.epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        snapshot_interval_epochs=args.plot_every_epochs,
+        snapshot_callback=save_epoch_plot if args.plot_every_epochs is not None else None,
     )
     print(f"final accuracy: {result.final_accuracy:.3f}")
 
