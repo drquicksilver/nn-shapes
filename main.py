@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable, Optional, Tuple
 
 import matplotlib
+from matplotlib.colors import LinearSegmentedColormap
 
 import torch
 from torch import nn
@@ -171,6 +172,19 @@ def make_prediction_grid(
     return grid_x, grid_y, probabilities
 
 
+def make_contour_colormap() -> LinearSegmentedColormap:
+    """Return a contour colormap with a hard threshold at probability 0.50."""
+    return LinearSegmentedColormap.from_list(
+        "inside_probability_threshold",
+        [
+            (0.0, "green"),
+            (0.5, "blue"),
+            (0.5, "red"),
+            (1.0, "yellow"),
+        ],
+    )
+
+
 def plot_decision_boundary(
     model: ShapeClassifier,
     shape: str,
@@ -193,8 +207,10 @@ def plot_decision_boundary(
         grid_x.numpy(),
         grid_y.numpy(),
         probabilities.numpy(),
-        levels=20,
-        cmap="RdYlBu_r",
+        levels=[level / 20 for level in range(21)],
+        cmap=make_contour_colormap(),
+        vmin=0.0,
+        vmax=1.0,
         alpha=0.75,
     )
     ax.contour(
