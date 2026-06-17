@@ -4,7 +4,14 @@ from pathlib import Path
 import torch
 from torch.utils.data import TensorDataset
 
-from main import ShapeClassifier, make_epoch_output_path, label_box, label_circle, train_model
+from main import (
+    ShapeClassifier,
+    label_box,
+    label_circle,
+    make_contour_colormap,
+    make_epoch_output_path,
+    train_model,
+)
 
 
 class ShapeLabelTests(unittest.TestCase):
@@ -84,6 +91,19 @@ class TrainingSnapshotTests(unittest.TestCase):
                 snapshot_interval_epochs=0,
                 snapshot_callback=lambda epoch, result: None,
             )
+
+
+class ContourColormapTests(unittest.TestCase):
+    def test_contour_colormap_has_hard_change_at_half_probability(self) -> None:
+        colormap = make_contour_colormap()
+
+        below_half = colormap(0.49)[:3]
+        at_half = colormap(0.50)[:3]
+        above_half = colormap(0.51)[:3]
+
+        self.assertGreater(below_half[2], below_half[1])
+        self.assertGreater(at_half[0], at_half[1])
+        self.assertGreater(above_half[0], above_half[1])
 
 
 class OutputPathTests(unittest.TestCase):
